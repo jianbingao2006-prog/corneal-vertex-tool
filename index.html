@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#2563eb" />
+<meta name="format-detection" content="telephone=no" />
+<title>角膜顶点偏移量工具</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Ccircle cx='32' cy='32' r='18' fill='none' stroke='white' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23ff5252'/%3E%3C/svg%3E" />
+<style>
+  /* 全局字体统一为微软雅黑（含安卓常见同形回退，保证 vivo / 小米也能正常显示） */
+  :root{
+    --font-yahei: "Microsoft YaHei","微软雅黑","Microsoft YaHei UI","PingFang SC","HarmonyOS Sans SC","MiSans","HYQiHei","Source Han Sans CN","Noto Sans CJK SC","Heiti SC",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{
+    margin:0;padding:0;
+    font-family:var(--font-yahei);
+    background:#eef3f8;color:#172033;
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior-y:contain;
+  }
+  body{
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .topbar{
+    position:sticky;top:0;z-index:5;
+    background:linear-gradient(135deg,#2563eb,#1e40af);
+    color:#fff;
+    padding:14px 16px;
+    display:flex;align-items:center;justify-content:space-between;
+    box-shadow:0 2px 10px rgba(30,64,175,.25);
+  }
+  .topbar .title{font-size:17px;font-weight:700;letter-spacing:.5px}
+  .topbar .ver{font-size:11px;opacity:.85}
+  .app{
+    width:min(1100px,100%);
+    margin:0 auto;
+    padding:12px;
+  }
+  .panel{
+    background:#fff;
+    border:1px solid #d8e0eb;
+    border-radius:16px;
+    box-shadow:0 4px 14px rgba(16,24,40,.06);
+    padding:14px;
+    margin-bottom:12px;
+  }
+  h2{
+    font-size:15px;margin:0 0 10px;font-weight:700;
+    display:flex;align-items:center;gap:8px;
+  }
+  h2::before{
+    content:"";width:4px;height:14px;background:#2563eb;border-radius:2px;
+  }
+  .eye-wrap{
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  }
+  .eye{
+    background:#fbfcff;border:1px solid #edf1f6;border-radius:12px;padding:10px;
+  }
+  .eye-title{
+    font-weight:700;margin-bottom:8px;font-size:14px;color:#2563eb;
+  }
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  label{
+    display:block;font-size:12px;font-weight:600;color:#475467;margin-bottom:4px;
+  }
+  input{
+    width:100%;
+    border:1px solid #cfd8e6;border-radius:10px;
+    padding:10px;
+    font-size:15px;
+    outline:none;background:#fff;
+    font-family:var(--font-yahei);
+    -webkit-appearance:none;
+  }
+  input:focus{
+    border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15);
+  }
+  .result{
+    margin-top:6px;font-size:11px;color:#667085;line-height:1.5;
+  }
+  .preview-title{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:8px;font-size:13px;color:#475467;
+  }
+  .canvas-wrap{
+    width:100%;overflow:auto;background:#fff;
+    border:1px solid #d8e0eb;border-radius:12px;
+    -webkit-overflow-scrolling:touch;
+  }
+  canvas{
+    display:block;width:100%;min-width:920px;height:auto;background:#fff;
+  }
+  .actions{
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  }
+  button{
+    border:0;border-radius:12px;padding:13px;font-weight:700;cursor:pointer;
+    font-size:15px;font-family:var(--font-yahei);
+    transition:transform .05s ease;
+  }
+  button:active{transform:scale(.97)}
+  .primary{background:#2563eb;color:#fff;grid-column:1 / -1}
+  .gray{background:#f2f4f7;color:#344054;border:1px solid #e4e7ec}
+  .note{
+    margin-top:10px;font-size:11px;color:#98a2b3;line-height:1.6;
+  }
+
+  /* 小屏单列 */
+  @media (max-width:600px){
+    .eye-wrap{grid-template-columns:1fr}
+    canvas{min-width:760px}
+  }
+  @media print{
+    .topbar,.section.input-section,.section.action-section,.preview-title{display:none!important}
+    body{background:#fff}
+    .app{padding:0}
+    .panel{box-shadow:none;border:0;padding:0}
+    canvas{border:0;border-radius:0;width:100%;min-width:0}
+    @page{size:A4 landscape;margin:8mm}
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="title">角膜顶点偏移量工具</div>
+  <div class="ver">App v1.0</div>
+</div>
+
+<div class="app">
+  <div class="panel section input-section">
+    <h2>输入坐标</h2>
+    <div class="eye-wrap">
+      <div class="eye">
+        <div class="eye-title">OS 左眼</div>
+        <div class="two">
+          <div><label>X / mm</label><input id="osX" type="number" step="0.01" inputmode="decimal" value="-0.29"></div>
+          <div><label>Y / mm</label><input id="osY" type="number" step="0.01" inputmode="decimal" value="0.51"></div>
+        </div>
+        <div id="osResult" class="result"></div>
+      </div>
+      <div class="eye">
+        <div class="eye-title">OD 右眼</div>
+        <div class="two">
+          <div><label>X / mm</label><input id="odX" type="number" step="0.01" inputmode="decimal" value="0.19"></div>
+          <div><label>Y / mm</label><input id="odY" type="number" step="0.01" inputmode="decimal" value="0.13"></div>
+        </div>
+        <div id="odResult" class="result"></div>
+      </div>
+    </div>
+    <div class="note">X 向右为正，Y 向上为正；自动换算距离 r 与角度 θ。</div>
+  </div>
+
+  <div class="panel section preview-section">
+    <div class="preview-title">
+      <span>预览（与导出图一致）</span>
+      <span id="status">已生成</span>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="chart" width="1800" height="1150"></canvas>
+    </div>
+  </div>
+
+  <div class="panel section action-section">
+    <h2>输出</h2>
+    <div class="actions">
+      <button class="primary" id="pngBtn">输出 PNG 图片</button>
+      <button class="gray" id="printBtn">打印 / 另存 PDF</button>
+      <button class="gray" id="resetBtn">恢复示例</button>
+    </div>
+    <div class="note">点击"输出 PNG"将下载高清图片到本机。</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const canvas = $("chart");
+const ctx = canvas.getContext("2d");
+const OUTER_MM = 1.0;
+const INNER_MM = 0.5;
+const EXPORT_SCALE = 3;
+
+/* 整个 canvas 内部统一使用微软雅黑（含安卓回退） */
+const FONT_FAMILY = '"Microsoft YaHei","微软雅黑","Microsoft YaHei UI","PingFang SC","HarmonyOS Sans SC","MiSans","Source Han Sans CN","Noto Sans CJK SC","Heiti SC",sans-serif';
+
+function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
+function round(n,d=2){ return Number(n).toFixed(d); }
+function fmt(n){ return n >= 0 ? "+" + round(n,2) : round(n,2); }
+function angleNormalize(deg){ let d = deg % 360; if(d < 0) d += 360; return d; }
+function polar(pt){
+  const r = Math.sqrt(pt.x*pt.x + pt.y*pt.y);
+  const a = angleNormalize(Math.atan2(pt.y, pt.x) * 180 / Math.PI);
+  return {r,a};
+}
+function read(){
+  return {
+    os:{x:num($("osX").value), y:num($("osY").value)},
+    od:{x:num($("odX").value), y:num($("odY").value)}
+  };
+}
+function text(c,t,x,y,opt={}){
+  c.save();
+  c.font = opt.font || ("22px " + FONT_FAMILY);
+  c.fillStyle = opt.color || "#111";
+  c.textAlign = opt.align || "left";
+  c.textBaseline = opt.baseline || "alphabetic";
+  c.fillText(t,x,y);
+  c.restore();
+}
+function updateResult(){
+  const s = read();
+  const os = polar(s.os);
+  const od = polar(s.od);
+  $("osResult").textContent = `r=${round(os.r,2)} mm，θ=${round(os.a,0)}°`;
+  $("odResult").textContent = `r=${round(od.r,2)} mm，θ=${round(od.a,0)}°`;
+}
+function circle(c,cx,cy,r,label,pt){
+  const scale = r / OUTER_MM;
+  const inner = INNER_MM * scale;
+
+  text(c,label,cx,cy-r-42,{font:"700 38px " + FONT_FAMILY,align:"center",color:"#2b241c"});
+
+  c.beginPath(); c.arc(cx,cy,r,0,Math.PI*2);
+  c.strokeStyle="#625c52"; c.lineWidth=3.2; c.stroke();
+
+  c.beginPath(); c.arc(cx,cy,inner,0,Math.PI*2);
+  c.strokeStyle="#625c52"; c.lineWidth=4; c.stroke();
+
+  c.beginPath();
+  c.moveTo(cx-r,cy); c.lineTo(cx+r,cy);
+  c.moveTo(cx,cy-r); c.lineTo(cx,cy+r);
+  c.strokeStyle="#827b70"; c.lineWidth=2; c.stroke();
+
+  [0,30,60,90,120,150,210,240,270,300,330].forEach(deg=>{
+    const rad = deg*Math.PI/180;
+    const x = cx + Math.cos(rad)*(r+42);
+    const y = cy - Math.sin(rad)*(r+42);
+    text(c,String(deg),x,y,{font:"600 21px " + FONT_FAMILY,align:"center",baseline:"middle",color:"#534b42"});
+  });
+  text(c,"180",cx-r-48,cy,{font:"600 21px " + FONT_FAMILY,align:"center",baseline:"middle",color:"#534b42"});
+
+  const px = cx + pt.x*scale;
+  const py = cy - pt.y*scale;
+  const p = polar(pt);
+
+  c.beginPath(); c.arc(px,py,7.5,0,Math.PI*2);
+  c.fillStyle="#c12f1a"; c.fill();
+
+  c.beginPath();
+  c.moveTo(px-9,py); c.lineTo(px+9,py);
+  c.moveTo(px,py-9); c.lineTo(px,py+9);
+  c.strokeStyle="#111"; c.lineWidth=1.3; c.stroke();
+
+  text(c,`${round(p.r,2)}mm @ ${round(p.a,0)}°`,cx,cy+r+72,{font:"italic 700 26px " + FONT_FAMILY,align:"center",color:"#2c241c"});
+  text(c,"(X, Y) =",cx-58,cy+r+120,{font:"600 26px " + FONT_FAMILY,align:"right",color:"#2c241c"});
+  text(c,`(${fmt(pt.x)} , ${fmt(pt.y)})`,cx-50,cy+r+120,{font:"700 28px " + FONT_FAMILY,align:"left",color:"#d64230"});
+}
+function draw(target=ctx, scale=1){
+  const s = read();
+  updateResult();
+
+  target.save();
+  target.setTransform(scale,0,0,scale,0,0);
+  target.clearRect(0,0,1800,1150);
+
+  target.fillStyle="#fbfaf4";
+  target.fillRect(0,0,1800,1150);
+
+  circle(target,520,520,245,"OS",s.os);
+  circle(target,1280,520,245,"OD",s.od);
+
+  text(target,"Foot",900,325,{font:"700 32px " + FONT_FAMILY,align:"center",color:"#2f261c"});
+  text(target,"Head",900,785,{font:"700 32px " + FONT_FAMILY,align:"center",color:"#2f261c"});
+
+  text(target,"坐标约定：X 向右为正，Y 向上为正；θ 从右侧 0° 逆时针增加",900,1080,{
+    font:"20px " + FONT_FAMILY, align:"center", color:"#888"
+  });
+
+  target.restore();
+  $("status").textContent = "已生成：" + new Date().toLocaleTimeString();
+}
+
+/* 渲染高分辨率 PNG —— 与预览 1:1 一致，仅放大 EXPORT_SCALE 倍 */
+function renderExportCanvas(){
+  const out = document.createElement("canvas");
+  out.width = 1800 * EXPORT_SCALE;
+  out.height = 1150 * EXPORT_SCALE;
+  const outCtx = out.getContext("2d");
+  draw(outCtx, EXPORT_SCALE);
+  return out;
+}
+
+/* 输出 PNG：直接下载到本机（vivo / 小米浏览器都支持） */
+function outputPng(){
+  draw();
+  const out = renderExportCanvas();
+  const fileName = "角膜顶点偏移量_" + new Date().toISOString().slice(0,10) + ".png";
+
+  if(out.toBlob){
+    out.toBlob(blob=>{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 300);
+    }, "image/png");
+  }else{
+    const a = document.createElement("a");
+    a.href = out.toDataURL("image/png");
+    a.download = fileName; a.click();
+  }
+}
+
+["osX","osY","odX","odY"].forEach(id=>{
+  $(id).addEventListener("input",draw);
+  $(id).addEventListener("change",draw);
+});
+$("pngBtn").addEventListener("click",outputPng);
+$("printBtn").addEventListener("click",()=>{draw();window.print();});
+$("resetBtn").addEventListener("click",()=>{
+  $("osX").value="-0.29"; $("osY").value="0.51";
+  $("odX").value="0.19"; $("odY").value="0.13";
+  draw();
+});
+
+/* 等字体加载完再画一次，保证 vivo / 小米渲染稳定 */
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(draw);
+}
+draw();
+
+/* 注册 Service Worker —— PWA 离线可用 */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
