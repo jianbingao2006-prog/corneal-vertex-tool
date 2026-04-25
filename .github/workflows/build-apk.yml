@@ -29,40 +29,44 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+          packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
+          accept-android-sdk-licenses: true
 
-      - name: Install expect (for driving interactive prompts)
+      - name: Verify Android SDK structure
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "=== sdk root ==="
+          ls -la "$ANDROID_HOME" || true
+          echo "=== platforms ==="
+          ls -la "$ANDROID_HOME/platforms" || true
+          echo "=== build-tools ==="
+          ls -la "$ANDROID_HOME/build-tools" || true
+          echo "=== JDK ==="
+          "$JAVA_HOME/bin/java" -version
+
+      - name: Install expect
         run: sudo apt-get update -qq && sudo apt-get install -y -qq expect
 
       - name: Install Bubblewrap CLI
-        run: npm install -g @bubblewrap/cli@latest
+        run: npm install -g @bubblewrap/cli@1.23.1
 
-      - name: Pre-configure Bubblewrap (skip JDK/SDK install prompts)
+      - name: Pre-configure Bubblewrap
         run: |
           mkdir -p ~/.bubblewrap
-          cat > ~/.bubblewrap/config.json <<EOF
-          {
-            "jdkPath": "${JAVA_HOME}",
-            "androidSdkPath": "${ANDROID_HOME}"
-          }
-          EOF
-          echo "=== Bubblewrap config ==="
+          printf '{\n  "jdkPath": "%s",\n  "androidSdkPath": "%s"\n}\n' "$JAVA_HOME" "$ANDROID_HOME" > ~/.bubblewrap/config.json
+          echo "=== ~/.bubblewrap/config.json ==="
           cat ~/.bubblewrap/config.json
-          echo "=== JDK ==="
-          "${JAVA_HOME}/bin/java" -version
-          echo "=== Android SDK ==="
-          ls "${ANDROID_HOME}" || echo "ANDROID_HOME not set"
 
-      - name: Initialize TWA project (driven by expect)
+      - name: Initialize TWA project
         run: |
           mkdir -p twa
           cat > /tmp/init.exp <<'EXPECT_EOF'
           #!/usr/bin/expect -f
-          set timeout 300
+          set timeout 600
           set manifest_url "https://sprightly-souffle-b46046.netlify.app/manifest.webmanifest"
-
           spawn bubblewrap init --manifest=$manifest_url --directory=./twa --skipPwaValidation
-
           expect {
             -re {First and Last names}        { send "Corneal Vertex Tool\r"; exp_continue }
             -re {Organizational Unit}         { send "Personal\r"; exp_continue }
@@ -80,22 +84,23 @@ jobs:
           }
           EXPECT_EOF
           chmod +x /tmp/init.exp
-          /tmp/init.exp 2>&1 | tee init.log
-
+          /tmp/init.exp 2>&1 | tee twa/init.log
           echo "=========== After init ==========="
           ls -la twa/ || true
           echo "=========== twa-manifest.json ==========="
-          cat twa/twa-manifest.json 2>/dev/null || echo "(no twa-manifest.json yet)"
+          cat twa/twa-manifest.json 2>/dev/null || echo "(no twa-manifest.json)"
 
-      - name: Build APK (driven by expect)
+      - name: Bubblewrap doctor (diagnose)
+        working-directory: twa
+        run: bubblewrap doctor || true
+
+      - name: Build APK
         working-directory: twa
         run: |
           cat > /tmp/build.exp <<'EXPECT_EOF'
           #!/usr/bin/expect -f
-          set timeout 1200
-
+          set timeout 1500
           spawn bubblewrap build --skipPwaValidation
-
           expect {
             -re {[Pp]assword for the [Kk]ey [Ss]tore} { send "android123\r"; exp_continue }
             -re {[Pp]assword for the [Kk]ey}          { send "android123\r"; exp_continue }
@@ -105,11 +110,10 @@ jobs:
           EXPECT_EOF
           chmod +x /tmp/build.exp
           /tmp/build.exp 2>&1 | tee build.log
-
           echo "=========== After build ==========="
           ls -la *.apk *.aab *.keystore 2>/dev/null || ls -la
 
-      - name: Upload APK artifact
+      - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
